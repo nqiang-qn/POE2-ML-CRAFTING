@@ -1,0 +1,29 @@
+{
+	"name": "poe2-ml-crafting",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"workspaces": [
+		"packages/*"
+	],
+	"scripts": {
+		"build": "tsc -b",
+		"typecheck": "tsc -b --pretty false",
+		"lint": "eslint .",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"check": "npm run typecheck && npm run lint && npm run format:check && npm test",
+		"test": "tsx tests/import-poe2db-modifiers.test.ts && tsx tests/crafting-actions.test.ts",
+		"import:gloves": "tsx packages/poe2db-importer/src/cli.ts",
+		"query:modifiers": "tsx packages/data/src/query-cli.ts"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@types/node": "^24.0.0",
+		"eslint": "^10.7.0",
+		"prettier": "^3.9.5",
+		"tsx": "^4.20.0",
+		"typescript": "^5.9.0",
+		"typescript-eslint": "^8.63.0"
+	}
+}

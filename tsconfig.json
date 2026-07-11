@@ -1,0 +1,17 @@
+{
+	"files": [],
+	"references": [
+		{
+			"path": "packages/domain"
+		},
+		{
+			"path": "packages/data"
+		},
+		{
+			"path": "packages/poe2db-importer"
+		},
+		{
+			"path": "packages/simulator"
+		}
+	]
+}
