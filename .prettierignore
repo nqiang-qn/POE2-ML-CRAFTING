@@ -1,5 +1,6 @@
 node_modules/
 packages/*/dist/
+tests/dist/
 data/
 package-lock.json
 LICENSE

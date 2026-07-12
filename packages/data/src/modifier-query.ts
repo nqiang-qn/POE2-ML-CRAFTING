@@ -24,6 +24,7 @@ export interface ModifierRow {
 export interface ModifierQueryOptions {
 	base?: string | null;
 	itemLevel?: number | null;
+	minimumModifierLevel?: number | null;
 	generation?: string | null;
 	family?: string | null;
 	existingFamilies?: readonly string[];
@@ -103,6 +104,10 @@ export function queryModifiers(
 	if (options.itemLevel !== null && options.itemLevel !== undefined) {
 		clauses.push("required_level <= ?");
 		values.push(options.itemLevel);
+	}
+	if (options.minimumModifierLevel !== null && options.minimumModifierLevel !== undefined) {
+		clauses.push("required_level >= ?");
+		values.push(options.minimumModifierLevel);
 	}
 	if (options.generation) {
 		clauses.push("LOWER(generation_type) = LOWER(?)");

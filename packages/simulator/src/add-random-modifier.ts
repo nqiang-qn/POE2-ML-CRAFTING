@@ -11,6 +11,11 @@ export interface AddRandomModifierResult {
 	readonly consumedOmens: readonly string[];
 }
 
+/** Eligibility controls for one random modifier addition. */
+export interface AddRandomModifierOptions {
+	readonly minimumModifierLevel?: number;
+}
+
 /**
  * Adds one eligible weighted ordinary modifier to an item.
  *
@@ -18,6 +23,7 @@ export interface AddRandomModifierResult {
  * @param item - Item with at least one open affix slot.
  * @param actionName - Stable action name supplied to Omen hooks.
  * @param context - Randomness and active Omen effects.
+ * @param options - Optional minimum generated modifier level.
  * @returns A new item, selected modifier, and consumed Omen names.
  * @throws If no open slot or positive-weight eligible outcome exists.
  */
@@ -26,10 +32,16 @@ export function addRandomModifier(
 	item: Item,
 	actionName: string,
 	context: ActionContext,
+	options: AddRandomModifierOptions = {},
 ): AddRandomModifierResult {
 	const openTypes = openGenerationTypes(item);
 	if (!openTypes.length) throw new Error("Item has no open affix slot");
-	const pool = eligibleOrdinaryModifiers(database, item, openTypes);
+	const pool = eligibleOrdinaryModifiers(
+		database,
+		item,
+		openTypes,
+		options.minimumModifierLevel ?? 0,
+	);
 	const omenResult = applyOmenPoolHooks(context, actionName, item, pool);
 	const selected = selectWeighted(
 		omenResult.pool as readonly (Modifier & { weight: number })[],

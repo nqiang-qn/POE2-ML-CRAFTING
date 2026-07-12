@@ -24,6 +24,9 @@ function parseArguments(argv: string[]): CliOptions {
 		if (option === "--db") result.db = value();
 		else if (option === "--base") result.base = value();
 		else if (option === "--item-level") result.itemLevel = Number(value());
+		else if (option === "--minimum-modifier-level") {
+			result.minimumModifierLevel = Number(value());
+		}
 		else if (option === "--generation") result.generation = value();
 		else if (option === "--family") result.family = value();
 		else if (option === "--existing-family") existingFamilies.push(value());

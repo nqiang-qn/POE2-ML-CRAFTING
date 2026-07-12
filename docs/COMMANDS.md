@@ -205,6 +205,83 @@ Use a different database:
 npm.cmd run query:modifiers -- --db data/test.sqlite3 --sources
 ```
 
+## Run Crafting Simulations
+
+Run a deterministic Regal Orb simulation against the real glove database:
+
+```powershell
+npm.cmd run simulate -- `
+	--base Gloves_str `
+	--item-level 60 `
+	--rarity magic `
+	--action regal-orb `
+	--runs 100000 `
+	--seed 12345 `
+	--top 20
+```
+
+Simulate Greater Exaltation and write a JSON report:
+
+```powershell
+npm.cmd run simulate -- `
+	--base Gloves_str `
+	--item-level 60 `
+	--rarity rare `
+	--action exalted-orb `
+	--omen greater-exaltation `
+	--runs 100000 `
+	--seed 12345 `
+	--output data/greater-exaltation.json
+```
+
+Supply initial modifiers by their displayed affix names. Repeat `--modifier` as
+needed. The highest eligible tier with that exact name is selected:
+
+```powershell
+npm.cmd run simulate -- `
+	--base Gloves_str `
+	--item-level 60 `
+	--rarity rare `
+	--modifier Hale `
+	--action orb-of-annulment `
+	--omen sinistral-annulment `
+	--runs 10000 `
+	--seed 7
+```
+
+Available action IDs:
+
+- `orb-of-transmutation`
+- `greater-orb-of-transmutation`
+- `perfect-orb-of-transmutation`
+- `orb-of-augmentation`
+- `greater-orb-of-augmentation`
+- `perfect-orb-of-augmentation`
+- `regal-orb`
+- `greater-regal-orb`
+- `perfect-regal-orb`
+- `exalted-orb`
+- `greater-exalted-orb`
+- `perfect-exalted-orb`
+- `orb-of-alchemy`
+- `chaos-orb`
+- `greater-chaos-orb`
+- `perfect-chaos-orb`
+- `orb-of-annulment`
+
+Available Omen IDs:
+
+- `greater-exaltation`
+- `sinistral-exaltation`
+- `dextral-exaltation`
+- `sinistral-annulment`
+- `dextral-annulment`
+- `sinistral-erasure`
+- `dextral-erasure`
+- `whittling`
+
+`--top` only limits console tables. JSON reports always retain every outcome.
+
 ## Common Workflow
 
 ```powershell
@@ -229,3 +306,4 @@ The authoritative script definitions are in `package.json`:
 | `npm.cmd run check`           | Run the complete validation suite |
 | `npm.cmd run import:gloves`   | Import a PoE2DB item-class page   |
 | `npm.cmd run query:modifiers` | Query the modifier database       |
+| `npm.cmd run simulate`        | Run a seeded crafting simulation  |

@@ -25,18 +25,21 @@ function toModifier(row: ModifierRow): Modifier & { weight: number } {
  * @param database - Open SQLite modifier database.
  * @param item - Item supplying base, level, and existing-family constraints.
  * @param generationTypes - Prefix/suffix types with capacity for a new affix.
+ * @param minimumModifierLevel - Lowest modifier level the currency may generate.
  * @returns Eligible domain modifiers with positive relative weights.
  */
 export function eligibleOrdinaryModifiers(
 	database: DatabaseSync,
 	item: Item,
 	generationTypes: readonly GenerationType[],
+	minimumModifierLevel = 0,
 ): (Modifier & { weight: number })[] {
 	const allowed = new Set(generationTypes);
 	return queryModifiers(database, {
 		base: item.base,
 		action: "ordinary",
 		itemLevel: item.itemLevel,
+		minimumModifierLevel,
 		existingFamilies: existingFamilies(item),
 		limit: Number.MAX_SAFE_INTEGER,
 	})

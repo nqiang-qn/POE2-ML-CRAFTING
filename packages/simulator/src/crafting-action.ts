@@ -14,6 +14,7 @@ export interface CraftingActionResult {
 export interface CraftingAction {
 	readonly id: string;
 	readonly name: string;
+	readonly minimumModifierLevel?: number;
 
 	/**
 	 * Checks whether the action can operate on an item state.

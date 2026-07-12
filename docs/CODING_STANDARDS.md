@@ -60,3 +60,8 @@ layout, including the four-column tab convention.
 Imported data structures must document their source and whether a field is
 official, datamined, third-party, inferred, or empirically measured. Probability
 code must state whether values are relative weights or normalized probabilities.
+
+Mechanics exposed by third-party databases must also be verified as active in
+the current game patch before entering the simulator's supported API. Removed or
+legacy mechanics may remain in imported raw data, but must not be registered as
+active actions or effects.

@@ -15,11 +15,12 @@
 		"check": "npm run typecheck && npm run lint && npm run format:check && npm test",
 		"test": "tsx tests/import-poe2db-modifiers.test.ts && tsx tests/crafting-actions.test.ts",
 		"import:gloves": "tsx packages/poe2db-importer/src/cli.ts",
-		"query:modifiers": "tsx packages/data/src/query-cli.ts"
+		"query:modifiers": "tsx packages/data/src/query-cli.ts",
+		"simulate": "tsx packages/simulator/src/simulate-cli.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
-		"@types/node": "^24.0.0",
+		"@types/node": "^24.13.3",
 		"eslint": "^10.7.0",
 		"prettier": "^3.9.5",
 		"tsx": "^4.20.0",

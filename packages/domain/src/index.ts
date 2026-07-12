@@ -21,6 +21,8 @@ export interface Modifier {
 	readonly text?: string;
 	readonly sourceSection?: string;
 	readonly spawnTags?: readonly string[];
+	readonly fractured?: boolean;
+	readonly removable?: boolean;
 }
 
 /** Immutable item state consumed and produced by crafting actions. */

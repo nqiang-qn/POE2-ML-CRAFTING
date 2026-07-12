@@ -60,10 +60,14 @@ Sacrifice sections. Pass `--include-special` to include them in query output.
 
 The simulator currently provides immutable item state, database-backed ordinary
 modifier eligibility, weighted selection, composable Omen addition/removal
-hooks, and a shared action registry. Implemented currency actions are Orb of
-Augmentation, Regal Orb, Exalted Orb, and Orb of Annulment. Individual named
-Omens are intentionally added only after their in-game rules have been verified
-and tested.
+hooks, minimum-modifier-level currency tiers, and a shared action registry.
+Implemented actions include normal, Greater, and Perfect variants of
+Transmutation, Augmentation, Regal, and Exalted currencies, plus Orb of
+Alchemy, normal/Greater/Perfect Chaos Orbs, and Orb of Annulment. Alchemy
+reforges normal or magic items into four-modifier rares. Chaos removes before
+adding its replacement, while fractured and explicitly protected modifiers are
+excluded from removal. Individual named Omens are intentionally added only
+after their in-game rules have been verified and tested.
 
 Query the eligible ordinary-currency pool for an item, optionally excluding
 families already present on it:

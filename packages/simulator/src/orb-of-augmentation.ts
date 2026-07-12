@@ -54,17 +54,56 @@ export function applyOrbOfAugmentation(
 	});
 }
 
-/** Orb of Augmentation action exposed through the common currency contract. */
-export const orbOfAugmentation: CraftingAction = {
+/** Configuration for an Augmentation currency tier. */
+export interface AugmentationActionOptions {
+	readonly id: string;
+	readonly name: string;
+	readonly minimumModifierLevel: number;
+}
+
+/**
+ * Creates an Augmentation action with a currency-specific modifier-level floor.
+ *
+ * @param options - Stable ID, display name, and minimum generated modifier level.
+ * @returns A registered-action-compatible Augmentation implementation.
+ */
+export function createAugmentationAction(options: AugmentationActionOptions): CraftingAction {
+	return Object.freeze({
+		...options,
+		canApply: canApplyOrbOfAugmentation,
+		apply(database, item, context) {
+			if (!this.canApply(item)) {
+				throw new Error(`${this.name} requires a magic item with an open affix slot`);
+			}
+			const result = addRandomModifier(database, item, this.name, context, {
+				minimumModifierLevel: options.minimumModifierLevel,
+			});
+			return Object.freeze({
+				item: result.item,
+				addedModifiers: Object.freeze([result.modifier]),
+				consumedOmens: result.consumedOmens,
+			});
+		},
+	} satisfies CraftingAction);
+}
+
+/** Standard Orb of Augmentation with no modifier-level floor. */
+export const orbOfAugmentation = createAugmentationAction({
 	id: "orb-of-augmentation",
 	name: ORB_OF_AUGMENTATION,
-	canApply: canApplyOrbOfAugmentation,
-	apply(database, item, context) {
-		const result = applyOrbOfAugmentation(database, item, context);
-		return Object.freeze({
-			item: result.item,
-			addedModifiers: Object.freeze([result.addedModifier]),
-			consumedOmens: result.consumedOmens,
-		});
-	},
-};
+	minimumModifierLevel: 0,
+});
+
+/** Greater Orb of Augmentation, restricted to level 44+ modifiers. */
+export const greaterOrbOfAugmentation = createAugmentationAction({
+	id: "greater-orb-of-augmentation",
+	name: "Greater Orb of Augmentation",
+	minimumModifierLevel: 44,
+});
+
+/** Perfect Orb of Augmentation, restricted to level 70+ modifiers. */
+export const perfectOrbOfAugmentation = createAugmentationAction({
+	id: "perfect-orb-of-augmentation",
+	name: "Perfect Orb of Augmentation",
+	minimumModifierLevel: 70,
+});

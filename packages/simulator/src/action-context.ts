@@ -12,7 +12,10 @@ export interface ModifierPoolInput extends OmenInput {
 /** Effect capable of modifying a compatible crafting action. */
 export interface Omen {
 	readonly name: string;
+	/** Orders removal hooks; restrictive filters run before selectors. */
+	readonly removalPriority?: number;
 	appliesTo(input: OmenInput): boolean;
+	modifyAdditionCount?(input: OmenInput & { count: number }): number;
 	modifyModifierPool?(input: ModifierPoolInput): readonly Modifier[];
 	modifyRemovalPool?(input: ModifierPoolInput): readonly Modifier[];
 }
@@ -34,15 +37,51 @@ export function applyOmenRemovalHooks(
 ): { pool: readonly Modifier[]; consumedOmens: string[] } {
 	let current = [...pool];
 	const consumedOmens: string[] = [];
-	for (const omen of context.omens) {
+	const orderedOmens = context.omens
+		.map((omen, index) => ({ omen, index }))
+		.sort(
+			(left, right) =>
+				(left.omen.removalPriority ?? 0) - (right.omen.removalPriority ?? 0) ||
+				left.index - right.index,
+		);
+	for (const { omen } of orderedOmens) {
 		if (!omen.appliesTo({ actionName, item })) continue;
-		if (omen.modifyRemovalPool) {
-			current = [...omen.modifyRemovalPool({ actionName, item, pool: current })];
-		}
+		if (!omen.modifyRemovalPool) continue;
+		current = [...omen.modifyRemovalPool({ actionName, item, pool: current })];
 		consumedOmens.push(omen.name);
 	}
 	return { pool: current, consumedOmens };
 }
+
+/**
+ * Applies Omen hooks that change how many modifiers an action adds.
+ *
+ * @param context - Randomness and active Omens for the crafting action.
+ * @param actionName - Stable action name used by Omen applicability rules.
+ * @param item - Item being crafted before additions begin.
+ * @param initialCount - Modifier count normally added by the currency.
+ * @returns The transformed count and consumed Omen names.
+ * @throws If an Omen returns a negative or non-integer count.
+ */
+export function applyOmenAdditionCountHooks(
+	context: ActionContext,
+	actionName: string,
+	item: Item,
+	initialCount: number,
+): { count: number; consumedOmens: string[] } {
+	let count = initialCount;
+	const consumedOmens: string[] = [];
+	for (const omen of context.omens) {
+		if (!omen.appliesTo({ actionName, item }) || !omen.modifyAdditionCount) continue;
+		count = omen.modifyAdditionCount({ actionName, item, count });
+		if (!Number.isInteger(count) || count < 0) {
+			throw new Error(`Omen ${omen.name} returned invalid addition count ${count}`);
+		}
+		consumedOmens.push(omen.name);
+	}
+	return { count, consumedOmens };
+}
+
 /** Runtime dependencies and effects shared through one crafting action. */
 export interface ActionContext {
 	readonly rng: () => number;
@@ -81,8 +120,8 @@ export function applyOmenPoolHooks(
 	const consumedOmens: string[] = [];
 	for (const omen of context.omens) {
 		if (!omen.appliesTo({ actionName, item })) continue;
-		if (omen.modifyModifierPool)
-			current = [...omen.modifyModifierPool({ actionName, item, pool: current })];
+		if (!omen.modifyModifierPool) continue;
+		current = [...omen.modifyModifierPool({ actionName, item, pool: current })];
 		consumedOmens.push(omen.name);
 	}
 	return { pool: current, consumedOmens };
