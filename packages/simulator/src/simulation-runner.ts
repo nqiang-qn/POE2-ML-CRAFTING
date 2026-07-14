@@ -1,7 +1,10 @@
+/** Seeded repeated-action simulation and aggregate outcome reporting. */
+
 import type { DatabaseSync } from "node:sqlite";
 import { affixCounts, type Item } from "@poe2craft/domain";
 import { createActionContext, type Omen } from "./action-context.js";
 import type { CraftingAction } from "./crafting-action.js";
+import { canApplyCraftingAction } from "./action-registry.js";
 
 /** Configuration for repeated independent executions of one crafting action. */
 export interface SimulationOptions {
@@ -29,6 +32,7 @@ export interface SimulationReport {
 	};
 	readonly addedModifiers: Readonly<Record<string, number>>;
 	readonly removedModifiers: Readonly<Record<string, number>>;
+	readonly fracturedModifiers: Readonly<Record<string, number>>;
 	readonly resultingAffixCounts: Readonly<Record<string, number>>;
 	readonly consumedOmens: Readonly<Record<string, number>>;
 }
@@ -79,10 +83,13 @@ export function runSimulation(
 	if (!Number.isSafeInteger(options.runs) || options.runs < 1) {
 		throw new Error("Simulation runs must be a positive safe integer");
 	}
-	if (!action.canApply(item)) throw new Error(`${action.name} cannot apply to the input item`);
+	if (!canApplyCraftingAction(database, action, item)) {
+		throw new Error(`${action.name} cannot apply to the input item`);
+	}
 
 	const addedModifiers: Record<string, number> = {};
 	const removedModifiers: Record<string, number> = {};
+	const fracturedModifiers: Record<string, number> = {};
 	const resultingAffixCounts: Record<string, number> = {};
 	const consumedOmens: Record<string, number> = {};
 	const rng = createSeededRandom(options.seed);
@@ -98,6 +105,8 @@ export function runSimulation(
 			increment(addedModifiers, modifier.name);
 		for (const modifier of result.removedModifiers ?? [])
 			increment(removedModifiers, modifier.name);
+		for (const modifier of result.fracturedModifiers ?? [])
+			increment(fracturedModifiers, modifier.name);
 		for (const omen of result.consumedOmens) increment(consumedOmens, omen);
 		const counts = affixCounts(result.item);
 		increment(resultingAffixCounts, `${counts.prefixes}P/${counts.suffixes}S`);
@@ -121,6 +130,7 @@ export function runSimulation(
 		}),
 		addedModifiers: Object.freeze(addedModifiers),
 		removedModifiers: Object.freeze(removedModifiers),
+		fracturedModifiers: Object.freeze(fracturedModifiers),
 		resultingAffixCounts: Object.freeze(resultingAffixCounts),
 		consumedOmens: Object.freeze(consumedOmens),
 	});

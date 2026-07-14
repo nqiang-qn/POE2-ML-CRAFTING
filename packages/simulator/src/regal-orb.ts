@@ -1,3 +1,5 @@
+/** Regal Orb upgrade from magic to rare with one weighted modifier addition. */
+
 import { RARITIES, changeRarity, type Item } from "@poe2craft/domain";
 import { addRandomModifier } from "./add-random-modifier.js";
 import type { CraftingAction } from "./crafting-action.js";

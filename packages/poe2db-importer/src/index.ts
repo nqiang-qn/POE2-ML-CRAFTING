@@ -1,3 +1,5 @@
+/** PoE2DB HTML extraction, SQLite schemas, imports, and provenance records. */
+
 import type { DatabaseSync } from "node:sqlite";
 
 /** Default PoE2DB page imported when no URL is supplied. */
@@ -106,6 +108,16 @@ CREATE TABLE IF NOT EXISTS modifiers (
 CREATE INDEX IF NOT EXISTS modifiers_family_idx ON modifiers(family_key);
 CREATE INDEX IF NOT EXISTS modifiers_weight_idx ON modifiers(weight);
 CREATE INDEX IF NOT EXISTS modifiers_level_idx ON modifiers(required_level);
+CREATE TABLE IF NOT EXISTS essence_modifiers (
+  id INTEGER PRIMARY KEY, source_url TEXT NOT NULL, essence_slug TEXT NOT NULL,
+  essence_name TEXT NOT NULL, tier TEXT NOT NULL, item_class_slug TEXT NOT NULL,
+  item_class_name TEXT NOT NULL, modifier_html TEXT NOT NULL, modifier_text TEXT NOT NULL,
+  generation_type TEXT NOT NULL, required_level INTEGER NOT NULL,
+  last_import_run_id INTEGER NOT NULL REFERENCES import_runs(id),
+  UNIQUE(source_url, item_class_slug, modifier_text, generation_type, required_level)
+);
+CREATE INDEX IF NOT EXISTS essence_modifiers_lookup_idx
+  ON essence_modifiers(essence_slug, item_class_slug, required_level);
 `;
 
 const UPSERT = `
@@ -196,4 +208,134 @@ export function importPage(database: DatabaseSync, sourceUrl: string, source: st
 		throw error;
 	}
 	return count;
+}
+
+/** One item-class mapping extracted from an Essence currency page. */
+export interface EssencePageModifier {
+	readonly itemClassSlug: string;
+	readonly itemClassName: string;
+	readonly modifierHtml: string;
+	readonly modifierText: string;
+	readonly generationType: "Prefix" | "Suffix";
+	readonly requiredLevel: number;
+}
+
+/** Parsed identity and class mappings from one Essence currency page. */
+export interface EssencePage {
+	readonly name: string;
+	readonly slug: string;
+	readonly tier: "Greater" | "Perfect";
+	readonly modifiers: readonly EssencePageModifier[];
+}
+
+/**
+ * Extracts item-class modifier mappings from a Greater or Perfect Essence page.
+ *
+ * @param sourceUrl - Canonical PoE2DB Essence URL.
+ * @param source - Complete Essence page HTML.
+ * @returns Parsed Essence identity and every class-specific modifier row.
+ * @throws If identity, tier, mapping table, or a table row is malformed.
+ */
+export function extractEssencePage(sourceUrl: string, source: string): EssencePage {
+	const title = source.match(/<meta\s+property="og:title"\s+content="([^"]+)"\s*\/?>/i)?.[1];
+	if (!title) throw new Error("Could not find the Essence page title");
+	const tier = title.startsWith("Greater Essence")
+		? "Greater"
+		: title.startsWith("Perfect Essence")
+			? "Perfect"
+			: undefined;
+	if (!tier) throw new Error(`Unsupported Essence tier in ${JSON.stringify(title)}`);
+	const slug = new URL(sourceUrl).pathname.split("/").filter(Boolean).at(-1);
+	if (!slug) throw new Error(`Could not derive an Essence slug from ${sourceUrl}`);
+	const table = source.match(
+		/<table[^>]*>\s*<thead>\s*<tr>\s*<th>Class<\/th><th>Modifier<\/th><th>Pre\/Suf<\/th><th>Required Level<\/th>.*?<\/table>/is,
+	)?.[0];
+	if (!table) throw new Error(`Could not find the class modifier table for ${title}`);
+	const modifiers: EssencePageModifier[] = [];
+	for (const rowMatch of table.matchAll(/<tr>(.*?)<\/tr>/gis)) {
+		const cells = [...(rowMatch[1] ?? "").matchAll(/<td>(.*?)<\/td>/gis)].map(
+			(match) => match[1] ?? "",
+		);
+		if (!cells.length) continue;
+		if (cells.length !== 4) throw new Error(`Malformed class modifier row for ${title}`);
+		const classMatch = cells[0]?.match(/href="([^"]+)"[^>]*>(.*?)<\/a>/is);
+		if (!classMatch) throw new Error(`Missing item class link for ${title}`);
+		const generationType = htmlToText(cells[2] ?? "");
+		if (generationType !== "Prefix" && generationType !== "Suffix") {
+			throw new Error(
+				`Invalid generation type ${JSON.stringify(generationType)} for ${title}`,
+			);
+		}
+		const requiredLevel = Number(htmlToText(cells[3] ?? ""));
+		if (!Number.isInteger(requiredLevel) || requiredLevel < 1) {
+			throw new Error(`Invalid required level for ${title}`);
+		}
+		modifiers.push(
+			Object.freeze({
+				itemClassSlug: classMatch[1] ?? "",
+				itemClassName: htmlToText(classMatch[2] ?? ""),
+				modifierHtml: cells[1] ?? "",
+				modifierText: htmlToText(cells[1] ?? ""),
+				generationType,
+				requiredLevel,
+			}),
+		);
+	}
+	return Object.freeze({ name: title, slug, tier, modifiers: Object.freeze(modifiers) });
+}
+
+/**
+ * Imports one parsed Essence currency page using idempotent SQLite upserts.
+ *
+ * @param database - Open writable SQLite database.
+ * @param sourceUrl - Canonical URL from which the page was obtained.
+ * @param source - Complete Essence page HTML.
+ * @returns Number of item-class mappings imported.
+ */
+export function importEssencePage(
+	database: DatabaseSync,
+	sourceUrl: string,
+	source: string,
+): number {
+	database.exec(SCHEMA);
+	const page = extractEssencePage(sourceUrl, source);
+	const run = database
+		.prepare(
+			"INSERT INTO import_runs(source_url, item_class, record_count) VALUES (?, 'Essence', 0)",
+		)
+		.run(sourceUrl);
+	const runId = Number(run.lastInsertRowid);
+	const upsert = database.prepare(`INSERT INTO essence_modifiers(
+		source_url, essence_slug, essence_name, tier, item_class_slug, item_class_name,
+		modifier_html, modifier_text, generation_type, required_level, last_import_run_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(source_url, item_class_slug, modifier_text, generation_type, required_level)
+		DO UPDATE SET essence_name=excluded.essence_name, tier=excluded.tier,
+		modifier_html=excluded.modifier_html, last_import_run_id=excluded.last_import_run_id`);
+	database.exec("BEGIN");
+	try {
+		for (const modifier of page.modifiers) {
+			upsert.run(
+				sourceUrl,
+				page.slug,
+				page.name,
+				page.tier,
+				modifier.itemClassSlug,
+				modifier.itemClassName,
+				modifier.modifierHtml,
+				modifier.modifierText,
+				modifier.generationType,
+				modifier.requiredLevel,
+				runId,
+			);
+		}
+		database
+			.prepare("UPDATE import_runs SET record_count=? WHERE id=?")
+			.run(page.modifiers.length, runId);
+		database.exec("COMMIT");
+	} catch (error) {
+		database.exec("ROLLBACK");
+		throw error;
+	}
+	return page.modifiers.length;
 }

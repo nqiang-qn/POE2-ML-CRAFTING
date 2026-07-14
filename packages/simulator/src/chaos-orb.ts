@@ -1,3 +1,5 @@
+/** Standard, Greater, and Perfect Chaos Orb remove-and-replace actions. */
+
 import { RARITIES, type Item } from "@poe2craft/domain";
 import { addRandomModifier } from "./add-random-modifier.js";
 import type { CraftingAction } from "./crafting-action.js";

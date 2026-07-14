@@ -1,3 +1,5 @@
+/** Active current-game Omens and their crafting-pool transformations. */
+
 import type { GenerationType } from "@poe2craft/domain";
 import type { Omen } from "./action-context.js";
 
@@ -27,6 +29,15 @@ function restrictChaosRemoval(name: string, generationType: GenerationType): Ome
 	return Object.freeze({
 		name,
 		appliesTo: ({ actionName }) => CHAOS_ORBS.has(actionName),
+		modifyRemovalPool: ({ pool }) =>
+			pool.filter((modifier) => modifier.generationType === generationType),
+	} satisfies Omen);
+}
+
+function restrictPerfectEssenceRemoval(name: string, generationType: GenerationType): Omen {
+	return Object.freeze({
+		name,
+		appliesTo: ({ actionName }) => actionName.startsWith("Perfect Essence of "),
 		modifyRemovalPool: ({ pool }) =>
 			pool.filter((modifier) => modifier.generationType === generationType),
 	} satisfies Omen);
@@ -72,6 +83,18 @@ export const omenOfWhittling: Omen = Object.freeze({
 	},
 } satisfies Omen);
 
+/** Restricts the next Perfect Essence to removing a prefix modifier. */
+export const omenOfSinistralCrystallisation = restrictPerfectEssenceRemoval(
+	"Omen of Sinistral Crystallisation",
+	"Prefix",
+);
+
+/** Restricts the next Perfect Essence to removing a suffix modifier. */
+export const omenOfDextralCrystallisation = restrictPerfectEssenceRemoval(
+	"Omen of Dextral Crystallisation",
+	"Suffix",
+);
+
 /** Active named Omens available to CLI, policy, and web consumers. */
 export const omens: ReadonlyMap<string, Omen> = new Map([
 	["greater-exaltation", omenOfGreaterExaltation],
@@ -82,4 +105,6 @@ export const omens: ReadonlyMap<string, Omen> = new Map([
 	["sinistral-erasure", omenOfSinistralErasure],
 	["dextral-erasure", omenOfDextralErasure],
 	["whittling", omenOfWhittling],
+	["sinistral-crystallisation", omenOfSinistralCrystallisation],
+	["dextral-crystallisation", omenOfDextralCrystallisation],
 ]);

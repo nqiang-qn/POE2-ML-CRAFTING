@@ -1,3 +1,5 @@
+/** Exalted Orb modifier addition, including compatible Exaltation Omens. */
+
 import { RARITIES, openGenerationTypes, type Item, type Modifier } from "@poe2craft/domain";
 import { applyOmenAdditionCountHooks } from "./action-context.js";
 import { addRandomModifier } from "./add-random-modifier.js";

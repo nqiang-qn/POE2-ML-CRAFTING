@@ -1,3 +1,5 @@
+/** Shared uniform modifier removal with fracture rules and Omen hooks. */
+
 import { removeModifierAt, type Item, type Modifier } from "@poe2craft/domain";
 import { applyOmenRemovalHooks, type ActionContext } from "./action-context.js";
 
@@ -24,6 +26,7 @@ export function isModifierRemovable(modifier: Modifier): boolean {
  * @param item - Item containing at least one removable explicit modifier.
  * @param actionName - Stable action name supplied to Omen applicability rules.
  * @param context - Random-number generator and active Omen effects.
+ * @param candidateFilter - Optional action-specific removal eligibility filter.
  * @returns A new item, removed modifier, and consumed Omen names.
  * @throws If no candidate remains or RNG returns outside `[0, 1)`.
  */
@@ -31,8 +34,11 @@ export function removeRandomModifier(
 	item: Item,
 	actionName: string,
 	context: ActionContext,
+	candidateFilter: (modifier: Modifier) => boolean = () => true,
 ): RemoveRandomModifierResult {
-	const candidates = item.modifiers.filter(isModifierRemovable);
+	const candidates = item.modifiers.filter(
+		(modifier) => isModifierRemovable(modifier) && candidateFilter(modifier),
+	);
 	const omenResult = applyOmenRemovalHooks(context, actionName, item, candidates);
 	if (!omenResult.pool.length) throw new Error("No removable modifiers remain");
 	const roll = context.rng();

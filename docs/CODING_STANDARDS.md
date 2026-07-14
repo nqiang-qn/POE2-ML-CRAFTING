@@ -2,6 +2,10 @@
 
 ## Public API Documentation
 
+Every source module begins with a short description of its responsibility in
+the system. This applies to production code, CLIs, experiments, scripts, and
+tests.
+
 Every exported function, class, interface, and non-obvious constant must have a
 TSDoc comment. Documentation should explain behavior and contracts rather than
 repeat the TypeScript signature.
@@ -31,6 +35,16 @@ Example:
 
 Private helpers only need comments when their purpose or algorithm is not clear
 from their name and types.
+
+Documentation coverage is enforced with:
+
+```powershell
+npm.cmd run docs:check
+```
+
+The check rejects missing TypeScript module descriptions, undocumented exported
+declarations, missing Python module docstrings, and undocumented public Python
+functions or classes. It is also part of `npm.cmd run check`.
 
 ## Formatting and Linting
 

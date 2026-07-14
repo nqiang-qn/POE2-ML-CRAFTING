@@ -1,3 +1,5 @@
+/** Orb of Augmentation addition to a magic item with one open affix slot. */
+
 import type { DatabaseSync } from "node:sqlite";
 import { RARITIES, openGenerationTypes, type Item, type Modifier } from "@poe2craft/domain";
 import type { ActionContext } from "./action-context.js";

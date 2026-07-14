@@ -1,24 +1,39 @@
+/** Unit and integration tests for crafting mechanics and graph discovery. */
+
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
 import { createItem, RARITIES } from "@poe2craft/domain";
+import { importPoeNinjaOverview, type PoeNinjaOverview } from "@poe2craft/data";
 import {
 	applyOrbOfAugmentation,
+	availableCraftingActions,
 	canApplyOrbOfAugmentation,
 	chaosOrb,
 	craftingActions,
 	createActionContext,
+	createCraftingTarget,
+	craftingStateKey,
+	createMarketCostModel,
+	discoverReachableStateGraph,
+	encodeCraftingState,
+	enumerateExactActionOutcomes,
 	exaltedOrb,
+	essenceActions,
+	fracturingOrb,
 	greaterOrbOfTransmutation,
+	isTargetSatisfied,
 	greaterChaosOrb,
 	perfectChaosOrb,
 	omenOfDextralAnnulment,
 	omenOfDextralExaltation,
 	omenOfDextralErasure,
+	omenOfDextralCrystallisation,
 	omenOfGreaterExaltation,
 	omenOfSinistralAnnulment,
 	omenOfSinistralExaltation,
 	omenOfSinistralErasure,
+	omenOfSinistralCrystallisation,
 	omenOfWhittling,
 	orbOfAlchemy,
 	orbOfAnnulment,
@@ -26,7 +41,10 @@ import {
 	perfectOrbOfTransmutation,
 	regalOrb,
 	runSimulation,
+	sampleTransition,
 	selectWeighted,
+	serializeTransitionArtifact,
+	serializeReachableStateGraph,
 	type Omen,
 } from "@poe2craft/simulator";
 import { SCHEMA } from "@poe2craft/poe2db-importer";
@@ -172,8 +190,264 @@ test("action registry exposes all tiered modifier-adding currencies", () => {
 			"greater-chaos-orb",
 			"perfect-chaos-orb",
 			"orb-of-annulment",
+			"fracturing-orb",
+			...essenceActions.map((action) => action.id),
 		],
 	);
+});
+
+test("Greater Essence upgrades to rare and creates one crafted modifier", () => {
+	const db = fixtureDatabase();
+	try {
+		db.prepare(
+			`INSERT INTO modifiers(source_url,source_section,name,required_level,
+			generation_type_id,generation_type,family_json,family_key,weight,modifier_html,
+			modifier_text,crafting_tags_json,spawn_tags_json,excluded_tags_json,raw_json,
+			last_import_run_id) VALUES ('https://poe2db.tw/us/Gloves_str','essence',
+			'<a href="Greater_Essence_of_the_Body">Greater Essence of the Body</a>',
+			40,1,'Prefix','["EssenceLife"]','EssenceLife',0,'','+80 to maximum Life',
+			'[]','[]','[]','{}',1)`,
+		).run();
+		const action = craftingActions.get("greater-essence-of-the-body");
+		assert.ok(action);
+		const item = createItem({ base: "Gloves_str", itemLevel: 60, rarity: RARITIES.MAGIC });
+		const result = action.apply(db, item, createActionContext({ rng: () => 0 }));
+		assert.equal(result.item.rarity, RARITIES.RARE);
+		assert.equal(result.addedModifiers?.[0]?.crafted, true);
+		assert.equal(result.item.modifiers.filter((modifier) => modifier.crafted).length, 1);
+		assert.equal(action.canApply(result.item), false);
+	} finally {
+		db.close();
+	}
+});
+
+test("Perfect Essence replaces a removable modifier with one crafted modifier", () => {
+	const db = fixtureDatabase();
+	try {
+		db.prepare(
+			`INSERT INTO modifiers(source_url,source_section,name,required_level,
+			generation_type_id,generation_type,family_json,family_key,weight,modifier_html,
+			modifier_text,crafting_tags_json,spawn_tags_json,excluded_tags_json,raw_json,
+			last_import_run_id) VALUES ('https://poe2db.tw/us/Gloves_str','essence',
+			'<a href="Perfect_Essence_of_the_Body">Perfect Essence of the Body</a>',
+			50,1,'Prefix','["EssenceLife"]','EssenceLife',0,'','8% increased maximum Life',
+			'[]','[]','[]','{}',1)`,
+		).run();
+		const action = craftingActions.get("perfect-essence-of-the-body");
+		assert.ok(action);
+		const item = createItem({
+			base: "Gloves_str",
+			itemLevel: 60,
+			rarity: RARITIES.RARE,
+			modifiers: [
+				{ name: "Old Prefix", generationType: "Prefix", families: ["OldPrefix"] },
+				{ name: "Old Suffix", generationType: "Suffix", families: ["OldSuffix"] },
+			],
+		});
+		const result = action.apply(db, item, createActionContext({ rng: () => 0 }));
+		assert.equal(result.removedModifiers?.[0]?.name, "Old Prefix");
+		assert.equal(result.addedModifiers?.[0]?.crafted, true);
+		assert.equal(result.item.modifiers.filter((modifier) => modifier.crafted).length, 1);
+	} finally {
+		db.close();
+	}
+});
+
+test("Crystallisation Omens restrict Perfect Essence removal by affix type", () => {
+	const db = fixtureDatabase();
+	try {
+		db.prepare(
+			`INSERT INTO modifiers(source_url,source_section,name,required_level,
+			generation_type_id,generation_type,family_json,family_key,weight,modifier_html,
+			modifier_text,crafting_tags_json,spawn_tags_json,excluded_tags_json,raw_json,
+			last_import_run_id) VALUES ('https://poe2db.tw/us/Gloves_str','essence',
+			'<a href="Perfect_Essence_of_the_Body">Perfect Essence of the Body</a>',
+			50,1,'Prefix','["EssenceLife"]','EssenceLife',0,'','8% increased maximum Life',
+			'[]','[]','[]','{}',1)`,
+		).run();
+		const action = craftingActions.get("perfect-essence-of-the-body");
+		assert.ok(action);
+		const item = createItem({
+			base: "Gloves_str",
+			itemLevel: 60,
+			rarity: RARITIES.RARE,
+			modifiers: [
+				{ name: "Old Prefix", generationType: "Prefix", families: ["OldPrefix"] },
+				{ name: "Old Suffix", generationType: "Suffix", families: ["OldSuffix"] },
+			],
+		});
+		const prefixResult = action.apply(
+			db,
+			item,
+			createActionContext({ rng: () => 0, omens: [omenOfSinistralCrystallisation] }),
+		);
+		assert.equal(prefixResult.removedModifiers?.[0]?.generationType, "Prefix");
+		assert.deepEqual(prefixResult.consumedOmens, ["Omen of Sinistral Crystallisation"]);
+
+		const suffixResult = action.apply(
+			db,
+			item,
+			createActionContext({ rng: () => 0, omens: [omenOfDextralCrystallisation] }),
+		);
+		assert.equal(suffixResult.removedModifiers?.[0]?.generationType, "Suffix");
+		assert.deepEqual(suffixResult.consumedOmens, ["Omen of Dextral Crystallisation"]);
+	} finally {
+		db.close();
+	}
+});
+
+test("Crystallisation Omens do not apply to Greater Essences", () => {
+	const omenInput = {
+		actionName: "Greater Essence of the Body",
+		item: createItem({ base: "Gloves_str", itemLevel: 60, rarity: RARITIES.MAGIC }),
+	};
+	assert.equal(omenOfSinistralCrystallisation.appliesTo(omenInput), false);
+	assert.equal(omenOfDextralCrystallisation.appliesTo(omenInput), false);
+});
+
+test("item construction rejects more than one crafted modifier", () => {
+	assert.throws(
+		() =>
+			createItem({
+				base: "Gloves_str",
+				itemLevel: 60,
+				rarity: RARITIES.RARE,
+				modifiers: [
+					{
+						name: "Craft One",
+						generationType: "Prefix",
+						families: ["One"],
+						crafted: true,
+					},
+					{
+						name: "Craft Two",
+						generationType: "Suffix",
+						families: ["Two"],
+						crafted: true,
+					},
+				],
+			}),
+		/one crafted modifier/,
+	);
+});
+
+test("available actions include only Essences mapped for the item class", () => {
+	const db = fixtureDatabase();
+	try {
+		db.prepare(
+			`INSERT INTO essence_modifiers(source_url,essence_slug,essence_name,tier,
+			item_class_slug,item_class_name,modifier_html,modifier_text,generation_type,
+			required_level,last_import_run_id) VALUES
+			('https://poe2db.tw/us/Greater_Essence_of_the_Body',
+			'Greater_Essence_of_the_Body','Greater Essence of the Body','Greater',
+			'Gloves','Gloves','+85 Life','+85 Life','Prefix',36,1)`,
+		).run();
+		const item = createItem({ base: "Gloves_str", itemLevel: 60, rarity: RARITIES.MAGIC });
+		const ids = availableCraftingActions(db, item).map((action) => action.id);
+		assert.ok(ids.includes("greater-essence-of-the-body"));
+		assert.equal(ids.includes("greater-essence-of-abrasion"), false);
+	} finally {
+		db.close();
+	}
+});
+
+test("Perfect Essence removes from its required affix side when that side is full", () => {
+	const db = fixtureDatabase();
+	try {
+		db.prepare(
+			`INSERT INTO essence_modifiers(source_url,essence_slug,essence_name,tier,
+			item_class_slug,item_class_name,modifier_html,modifier_text,generation_type,
+			required_level,last_import_run_id) VALUES
+			('https://poe2db.tw/us/Perfect_Essence_of_Grounding',
+			'Perfect_Essence_of_Grounding','Perfect Essence of Grounding','Perfect',
+			'Gloves','Gloves','recoup','Lightning recoup','Suffix',60,1)`,
+		).run();
+		const action = craftingActions.get("perfect-essence-of-grounding");
+		assert.ok(action);
+		const item = createItem({
+			base: "Gloves_str",
+			itemLevel: 80,
+			rarity: RARITIES.RARE,
+			modifiers: [
+				{ name: "Prefix", generationType: "Prefix", families: ["Prefix"] },
+				{ name: "Suffix One", generationType: "Suffix", families: ["SuffixOne"] },
+				{ name: "Suffix Two", generationType: "Suffix", families: ["SuffixTwo"] },
+				{ name: "Suffix Three", generationType: "Suffix", families: ["SuffixThree"] },
+			],
+		});
+		const result = action.apply(db, item, createActionContext({ rng: () => 0 }));
+		assert.equal(result.removedModifiers?.[0]?.generationType, "Suffix");
+		assert.equal(result.addedModifiers?.[0]?.generationType, "Suffix");
+	} finally {
+		db.close();
+	}
+});
+
+test("Fracturing Orb locks a random eligible modifier", () => {
+	const db = fixtureDatabase();
+	try {
+		const item = createItem({
+			base: "Gloves_str",
+			itemLevel: 60,
+			rarity: RARITIES.RARE,
+			modifiers: [
+				{ name: "Life", generationType: "Prefix", families: ["Life"] },
+				{
+					name: "Desecrated",
+					generationType: "Prefix",
+					families: ["Desecrated"],
+					sourceSection: "desecrated",
+				},
+				{ name: "Fire", generationType: "Suffix", families: ["Fire"] },
+				{ name: "Cold", generationType: "Suffix", families: ["Cold"] },
+			],
+		});
+		const result = fracturingOrb.apply(db, item, createActionContext({ rng: () => 0 }));
+		assert.equal(result.fracturedModifiers?.[0]?.name, "Life");
+		assert.equal(result.item.modifiers[0]?.fractured, true);
+		assert.equal(item.modifiers[0]?.fractured, undefined);
+		assert.equal(fracturingOrb.canApply(result.item), false);
+	} finally {
+		db.close();
+	}
+});
+
+test("Fracturing Orb requires an unfractured rare item with four modifiers", () => {
+	const item = createItem({
+		base: "Gloves_str",
+		itemLevel: 60,
+		rarity: RARITIES.RARE,
+		modifiers: [
+			{ name: "One", generationType: "Prefix", families: ["One"] },
+			{ name: "Two", generationType: "Prefix", families: ["Two"] },
+			{ name: "Three", generationType: "Suffix", families: ["Three"] },
+		],
+	});
+	assert.equal(fracturingOrb.canApply(item), false);
+});
+
+test("simulation reports Fracturing Orb outcome frequencies", () => {
+	const db = fixtureDatabase();
+	try {
+		const item = createItem({
+			base: "Gloves_str",
+			itemLevel: 60,
+			rarity: RARITIES.RARE,
+			modifiers: [
+				{ name: "One", generationType: "Prefix", families: ["One"] },
+				{ name: "Two", generationType: "Prefix", families: ["Two"] },
+				{ name: "Three", generationType: "Suffix", families: ["Three"] },
+				{ name: "Four", generationType: "Suffix", families: ["Four"] },
+			],
+		});
+		const report = runSimulation(db, fracturingOrb, item, { runs: 20, seed: 42 });
+		assert.equal(
+			Object.values(report.fracturedModifiers).reduce((sum, count) => sum + count, 0),
+			20,
+		);
+	} finally {
+		db.close();
+	}
 });
 
 test("Annulment and Chaos preserve fractured modifiers", () => {
@@ -228,6 +502,44 @@ test("Chaos removes before rolling, freeing the removed modifier family", () => 
 		assert.equal(result.removedModifiers?.[0]?.name, "Old Life");
 		assert.equal(result.addedModifiers?.[0]?.familyKey, "IncreasedLife");
 		assert.equal(result.item.modifiers.length, 1);
+	} finally {
+		db.close();
+	}
+});
+
+test("Chaos outcomes are enumerated exactly from removal and modifier weights", () => {
+	const db = fixtureDatabase();
+	try {
+		const item = createItem({
+			base: "Gloves_str",
+			itemLevel: 60,
+			rarity: RARITIES.RARE,
+			modifiers: [
+				{
+					name: "Existing",
+					requiredLevel: 1,
+					generationType: "Prefix",
+					families: ["ExistingFamily"],
+					familyKey: "ExistingFamily",
+				},
+			],
+		});
+		const outcomes = enumerateExactActionOutcomes(
+			db,
+			item,
+			chaosOrb,
+			createActionContext({
+				rng: () => {
+					throw new Error("Exact enumeration must not consume RNG");
+				},
+			}),
+		);
+		assert.ok(outcomes);
+		assert.ok(outcomes.length > 1);
+		assert.ok(
+			Math.abs(outcomes.reduce((sum, outcome) => sum + outcome.probability, 0) - 1) < 1e-12,
+		);
+		assert.ok(outcomes.some((outcome) => outcome.item.modifiers[0]?.name === "Hale"));
 	} finally {
 		db.close();
 	}
@@ -498,6 +810,221 @@ test("simulation reports are deterministic and aggregate every run", () => {
 		assert.equal(
 			Object.values(first.resultingAffixCounts).reduce((sum, count) => sum + count, 0),
 			100,
+		);
+	} finally {
+		db.close();
+	}
+});
+
+test("target-relative state encoding preserves optimizer-relevant features", () => {
+	const target = createCraftingTarget({
+		id: "life-and-resistance",
+		modifiers: [
+			{ id: "life", families: ["IncreasedLife"] },
+			{ id: "elemental-resistance", families: ["FireResistance", "ColdResistance"] },
+		],
+	});
+	const item = createItem({
+		base: "Gloves_str",
+		itemLevel: 80,
+		rarity: RARITIES.RARE,
+		modifiers: [
+			{
+				name: "Life",
+				generationType: "Prefix",
+				families: ["IncreasedLife"],
+				familyKey: "IncreasedLife",
+				fractured: true,
+			},
+			{
+				name: "Fire",
+				generationType: "Suffix",
+				families: ["FireResistance"],
+				crafted: true,
+			},
+		],
+	});
+	const state = encodeCraftingState(item, target);
+	assert.deepEqual(state.targetPresence, [true, true]);
+	assert.equal(state.prefixCount, 1);
+	assert.equal(state.suffixCount, 1);
+	assert.equal(state.openPrefixCount, 2);
+	assert.equal(state.openSuffixCount, 2);
+	assert.equal(state.craftedModifierPresent, true);
+	assert.deepEqual(state.fracturedModifierIds, ["IncreasedLife"]);
+	assert.deepEqual(state.modifierStateIds, [
+		'["Prefix","IncreasedLife",["IncreasedLife"],null,true,true,false,true,null]',
+		'["Suffix",null,["FireResistance"],null,false,true,true,true,null]',
+	]);
+	assert.equal(isTargetSatisfied(item, target), true);
+	assert.equal(
+		craftingStateKey(state),
+		'v2|life-and-resistance|rare|11|1P/1S|2OP/2OS|C1|F:IncreasedLife|M:["Prefix","IncreasedLife",["IncreasedLife"],null,true,true,false,true,null],["Suffix",null,["FireResistance"],null,false,true,true,true,null]',
+	);
+});
+
+test("crafting targets reject duplicate feature identifiers", () => {
+	assert.throws(
+		() =>
+			createCraftingTarget({
+				id: "invalid",
+				modifiers: [
+					{ id: "life", families: ["Life"] },
+					{ id: "life", families: ["OtherLife"] },
+				],
+			}),
+		/Duplicate target modifier ID/,
+	);
+});
+
+test("transition sampling is deterministic and probabilities sum to one", () => {
+	const db = fixtureDatabase();
+	try {
+		const target = createCraftingTarget({
+			id: "life",
+			modifiers: [{ id: "life", families: ["IncreasedLife"] }],
+		});
+		const item = createItem({ base: "Gloves_str", itemLevel: 60, rarity: RARITIES.RARE });
+		const first = sampleTransition(db, item, target, exaltedOrb, {
+			samples: 100,
+			seed: 42,
+		});
+		const second = sampleTransition(db, item, target, exaltedOrb, {
+			samples: 100,
+			seed: 42,
+		});
+		assert.deepEqual(first, second);
+		assert.equal(
+			first.outcomes.reduce((sum, outcome) => sum + outcome.count, 0),
+			100,
+		);
+		assert.ok(
+			Math.abs(first.outcomes.reduce((sum, outcome) => sum + outcome.probability, 0) - 1) <
+				Number.EPSILON,
+		);
+		assert.equal(serializeTransitionArtifact(first), serializeTransitionArtifact(second));
+		assert.equal(first.inputStateKey, "v2|life|rare|0|0P/0S|3OP/3OS|C0|F:|M:");
+		assert.equal(first.dataSources[0]?.url, "https://poe2db.tw/us/Gloves_str");
+	} finally {
+		db.close();
+	}
+});
+
+test("transition sampling rejects unavailable actions", () => {
+	const db = fixtureDatabase();
+	try {
+		const target = createCraftingTarget({ id: "empty", modifiers: [] });
+		const normal = createItem({
+			base: "Gloves_str",
+			itemLevel: 60,
+			rarity: RARITIES.NORMAL,
+		});
+		assert.throws(
+			() => sampleTransition(db, normal, target, exaltedOrb, { samples: 1, seed: 1 }),
+			/cannot apply/,
+		);
+	} finally {
+		db.close();
+	}
+});
+
+test("reachable-state discovery is bounded, deterministic, and collision-free", () => {
+	const db = fixtureDatabase();
+	try {
+		const target = createCraftingTarget({
+			id: "life",
+			modifiers: [{ id: "life", families: ["IncreasedLife"] }],
+		});
+		const item = createItem({ base: "Gloves_str", itemLevel: 60, rarity: RARITIES.RARE });
+		const options = {
+			samplesPerAction: 100,
+			seed: 42,
+			maxStates: 10,
+			maxDepth: 1,
+			actionIds: ["exalted-orb"],
+		};
+		const first = discoverReachableStateGraph(db, item, target, options);
+		const second = discoverReachableStateGraph(db, item, target, options);
+		assert.deepEqual(first, second);
+		assert.equal(first.transitions.length, 1);
+		assert.equal(
+			first.transitions[0]?.outcomes.reduce((sum, outcome) => sum + (outcome.count ?? 0), 0),
+			100,
+		);
+		assert.ok(first.states.some((state) => state.terminal));
+		assert.ok(first.frontierStateKeys.length > 0);
+		assert.equal(first.truncated, true);
+		assert.equal(first.collisions.length, 0);
+		assert.equal(serializeReachableStateGraph(first), serializeReachableStateGraph(second));
+	} finally {
+		db.close();
+	}
+});
+
+test("reachable graphs pin one stored league snapshot and price Omen variants", () => {
+	const db = fixtureDatabase();
+	try {
+		const capturedAt = "2026-07-13T12:00:00.000Z";
+		const overview: PoeNinjaOverview = {
+			core: { primary: "exalted", secondary: "chaos", rates: {} },
+			items: [
+				{
+					id: "exalted",
+					name: "Exalted Orb",
+					detailsId: "exalted-orb",
+					category: "Currency",
+				},
+				{
+					id: "omen",
+					name: "Omen of Sinistral Exaltation",
+					detailsId: "omen-of-sinistral-exaltation",
+					category: "Ritual",
+				},
+			],
+			lines: [
+				{ id: "exalted", primaryValue: 1, volumePrimaryValue: 100 },
+				{ id: "omen", primaryValue: 5, volumePrimaryValue: 10 },
+			],
+		};
+		importPoeNinjaOverview(
+			db,
+			"Test League",
+			"Currency",
+			"https://poe.ninja/test",
+			capturedAt,
+			overview,
+		);
+		const costModel = createMarketCostModel(db, {
+			league: "Test League",
+			capturedAt,
+		});
+		assert.equal(costModel.quote("exalted-orb").totalExalted, 1);
+		assert.equal(costModel.quote("exalted-orb", ["sinistral-exaltation"]).totalExalted, 6);
+
+		const graph = discoverReachableStateGraph(
+			db,
+			createItem({ base: "Gloves_str", itemLevel: 60, rarity: RARITIES.RARE }),
+			createCraftingTarget({
+				id: "life",
+				modifiers: [{ id: "life", families: ["IncreasedLife"] }],
+			}),
+			{
+				samplesPerAction: 2,
+				seed: 42,
+				maxStates: 10,
+				maxDepth: 1,
+				actionIds: ["exalted-orb"],
+				omenIds: ["sinistral-exaltation"],
+				market: { league: "Test League", capturedAt },
+			},
+		);
+		assert.deepEqual(graph.marketSnapshot, { league: "Test League", capturedAt });
+		assert.deepEqual(
+			graph.transitions.map(({ variantId, cost }) => [variantId, cost?.totalExalted]),
+			[
+				["exalted-orb", 1],
+				["exalted-orb+sinistral-exaltation", 6],
+			],
 		);
 	} finally {
 		db.close();

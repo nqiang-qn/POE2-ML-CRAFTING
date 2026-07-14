@@ -1,3 +1,5 @@
+/** Common immutable contracts implemented by every crafting currency action. */
+
 import type { DatabaseSync } from "node:sqlite";
 import type { Item, Modifier } from "@poe2craft/domain";
 import type { ActionContext } from "./action-context.js";
@@ -7,6 +9,7 @@ export interface CraftingActionResult {
 	readonly item: Item;
 	readonly addedModifiers?: readonly Modifier[];
 	readonly removedModifiers?: readonly Modifier[];
+	readonly fracturedModifiers?: readonly Modifier[];
 	readonly consumedOmens: readonly string[];
 }
 
@@ -23,6 +26,15 @@ export interface CraftingAction {
 	 * @returns Whether the currency action is valid for the item.
 	 */
 	canApply(item: Item): boolean;
+
+	/**
+	 * Checks applicability when the action depends on imported crafting data.
+	 *
+	 * @param database - Open SQLite modifier database.
+	 * @param item - Candidate item state.
+	 * @returns Whether both item state and imported data permit the action.
+	 */
+	canApplyWithDatabase?(database: DatabaseSync, item: Item): boolean;
 
 	/**
 	 * Applies the action and returns a new immutable item state.

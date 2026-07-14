@@ -1,3 +1,5 @@
+/** Shared weighted modifier-addition operation with Omen pool hooks. */
+
 import type { DatabaseSync } from "node:sqlite";
 import { addModifier, openGenerationTypes, type Item, type Modifier } from "@poe2craft/domain";
 import { applyOmenPoolHooks, type ActionContext } from "./action-context.js";

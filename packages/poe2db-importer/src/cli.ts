@@ -1,3 +1,5 @@
+/** CLI for importing modifier tables from a PoE2DB item-class page. */
+
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";

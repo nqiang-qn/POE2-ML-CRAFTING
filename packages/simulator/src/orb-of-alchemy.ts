@@ -1,3 +1,5 @@
+/** Orb of Alchemy replacement of a normal or magic item with four rare affixes. */
+
 import { RARITIES, createItem, type Item, type Modifier } from "@poe2craft/domain";
 import { addRandomModifier } from "./add-random-modifier.js";
 import type { CraftingAction } from "./crafting-action.js";

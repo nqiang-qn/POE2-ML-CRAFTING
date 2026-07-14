@@ -1,3 +1,5 @@
+/** Construction of eligible ordinary modifier pools from imported metadata. */
+
 import type { DatabaseSync } from "node:sqlite";
 import { existingFamilies, type GenerationType, type Item, type Modifier } from "@poe2craft/domain";
 import { queryModifiers, type ModifierRow } from "@poe2craft/data";

@@ -1,0 +1,41 @@
+{
+	"database": "data/poe2db.sqlite3",
+	"item": {
+		"base": "Gloves_str",
+		"itemLevel": 60,
+		"rarity": "rare",
+		"modifiers": [
+			{
+				"name": "Encased",
+				"requiredLevel": 54,
+				"generationType": "Prefix",
+				"families": ["BaseLocalDefences"],
+				"familyKey": "BaseLocalDefences",
+				"weight": 1000,
+				"text": "+(160—190) to Armour",
+				"sourceSection": "normal",
+				"removable": true
+			}
+		]
+	},
+	"target": {
+		"id": "gloves-life",
+		"modifiers": [
+			{
+				"id": "life",
+				"families": ["IncreasedLife"]
+			}
+		]
+	},
+	"options": {
+		"samplesPerAction": 250,
+		"seed": 42,
+		"maxStates": 250,
+		"maxDepth": 10,
+		"actionIds": ["chaos-orb"],
+		"omenIds": [],
+		"market": {
+			"league": "Runes of Aldur"
+		}
+	}
+}

@@ -1,3 +1,5 @@
+/** Shared random-number and Omen hook context used by crafting actions. */
+
 import type { Item, Modifier } from "@poe2craft/domain";
 
 /** Common values supplied when checking whether an Omen applies. */

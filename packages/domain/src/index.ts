@@ -1,3 +1,5 @@
+/** Immutable item, modifier, rarity, and affix-capacity domain primitives. */
+
 /** Supported item rarities and their serialized values. */
 export const RARITIES = {
 	NORMAL: "normal",
@@ -22,6 +24,8 @@ export interface Modifier {
 	readonly sourceSection?: string;
 	readonly spawnTags?: readonly string[];
 	readonly fractured?: boolean;
+	readonly fracturable?: boolean;
+	readonly crafted?: boolean;
 	readonly removable?: boolean;
 }
 
@@ -59,6 +63,9 @@ export function createItem(input: CreateItemInput): Item {
 	}
 	if (!(Object.values(RARITIES) as string[]).includes(rarity)) {
 		throw new Error(`Invalid rarity: ${rarity}`);
+	}
+	if (modifiers.filter((modifier) => modifier.crafted).length > 1) {
+		throw new Error("An item cannot have more than one crafted modifier");
 	}
 	return Object.freeze({
 		base,
@@ -131,6 +138,26 @@ export function existingFamilies(item: Item): string[] {
  */
 export function addModifier(item: Item, modifier: Modifier): Item {
 	return createItem({ ...item, modifiers: [...item.modifiers, modifier] });
+}
+
+/**
+ * Returns a new immutable item with one modifier marked as fractured.
+ *
+ * @param item - Item containing the modifier to fracture.
+ * @param index - Zero-based modifier index.
+ * @returns A new immutable item with the selected modifier locked in place.
+ * @throws If the modifier index is outside the item modifier collection.
+ */
+export function fractureModifierAt(item: Item, index: number): Item {
+	if (!Number.isInteger(index) || index < 0 || index >= item.modifiers.length) {
+		throw new Error(`Modifier index ${index} is outside the item modifier collection`);
+	}
+	return createItem({
+		...item,
+		modifiers: item.modifiers.map((modifier, modifierIndex) =>
+			modifierIndex === index ? { ...modifier, fractured: true } : modifier,
+		),
+	});
 }
 
 /**

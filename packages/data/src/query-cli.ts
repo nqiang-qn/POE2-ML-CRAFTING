@@ -1,3 +1,5 @@
+/** CLI for inspecting imported modifier pools and their normalized probabilities. */
+
 import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { queryModifiers, querySections, querySources, type ModifierQueryOptions } from "./index.js";

@@ -122,13 +122,161 @@ npm.cmd run import:gloves -- `
 Imports use upserts, so rerunning an import updates existing rows without
 duplicating them. Each run is retained in the import history.
 
+Import Greater and Perfect Essence currency pages and their class mappings:
+
+```powershell
+npm.cmd run import:essences
+```
+
+Import a timestamped poe.ninja snapshot for Currency, Essences, and Ritual
+(which contains Omens), normalized to Exalted Orb values:
+
+```powershell
+npm.cmd run import:prices -- --league "Runes of Aldur"
+```
+
+This is an explicit, manual snapshot command. The simulator and graph exporter
+never contact poe.ninja. Run it once when beginning a league, or again only when
+you intentionally want a newer snapshot; older snapshots remain immutable.
+
 ## Query Imported Data
 
 Show every imported source page and its stored record count:
 
 ```powershell
 npm.cmd run query:modifiers -- --sources
+npm.cmd run validate:essences
 ```
+
+## Sample a Transition Artifact
+
+Create a JSON configuration containing `item`, `target`, `actionId`, `samples`,
+and `seed`, then write a deterministic artifact for Python experiments:
+
+```powershell
+npm.cmd run sample:transition -- `
+	--config path\to\transition-config.json `
+	--output data\transitions\sample.json
+```
+
+The optional configuration fields are `database` and `omenIds`.
+
+Discover and export a bounded reachable-state graph using a JSON configuration
+with `item`, `target`, and `options`:
+
+```powershell
+npm.cmd run discover:graph -- `
+	--config path\to\graph-config.json `
+	--output data\transitions\graph.json
+```
+
+Graph schema version 3 records each transition's `method`. Chaos Orb, Greater
+Chaos Orb, and Perfect Chaos Orb transitions are enumerated exactly from
+uniform removal choices and imported replacement weights; their `seed` and
+outcome `count` fields are `null`. Unsupported actions retain deterministic
+sampling and record `method: "sampled"`.
+
+To price graph transitions, add a static league snapshot and allowed Omens to
+`options`:
+
+```json
+{
+	"samplesPerAction": 1000,
+	"seed": 42,
+	"maxStates": 10000,
+	"maxDepth": 20,
+	"actionIds": ["exalted-orb"],
+	"omenIds": ["sinistral-exaltation"],
+	"market": {
+		"league": "Runes of Aldur",
+		"capturedAt": "2026-07-14T01:40:34.805Z"
+	}
+}
+```
+
+If `capturedAt` is omitted, discovery selects the latest already-stored
+snapshot once and records the resolved timestamp in `marketSnapshot`. It does
+not refresh prices. Providing `capturedAt` makes reruns independent of later
+manual imports.
+
+## Solve a Crafting Policy
+
+Python 3.11 or newer is recommended. The solver uses only the standard library,
+so there are no Python packages to install.
+
+Run value iteration over a complete, priced graph:
+
+```powershell
+python experiments/value_iteration.py `
+	--graph data/transitions/graph.json `
+	--output data/policies/policy.json
+```
+
+The solver rejects truncated graphs, state-abstraction collisions, missing
+prices, invalid probabilities, and non-terminal states without actions. The
+following approximation flags must therefore be chosen explicitly when needed:
+
+```powershell
+python experiments/value_iteration.py `
+	--graph data/transitions/graph.json `
+	--output data/policies/policy.json `
+	--allow-truncated `
+	--allow-collisions
+```
+
+Run the dependency-free Python tests:
+
+```powershell
+python -m unittest discover -s experiments -p "test_*.py"
+```
+
+The equivalent project command is `npm.cmd run test:python`. It includes a
+cross-language fixture that serializes a graph through the TypeScript simulator
+API, solves it with Python, and validates the policy with seeded rollouts.
+
+Validate the generated policy with deterministic Monte Carlo rollouts:
+
+```powershell
+python experiments/policy_rollout.py `
+	--graph data/transitions/graph.json `
+	--policy data/policies/policy.json `
+	--output data/policies/validation.json `
+	--episodes 10000 `
+	--seed 42
+```
+
+The report includes termination rate, failure states, mean/median/tail cost,
+step statistics, standard error, and the difference between simulated and
+value-iteration expected cost. Prediction error is omitted when any episode
+hits `--max-steps`, because the successful-only cost sample is then censored.
+
+## Run the Real Glove Example
+
+Discover a graph for repeatedly using Chaos Orbs on a real level-60 strength
+glove until the `IncreasedLife` family appears:
+
+```powershell
+npm.cmd run discover:graph -- `
+	--config examples/gloves-life-chaos.json `
+	--output data/transitions/gloves-life-chaos.json
+
+python experiments/value_iteration.py `
+	--graph data/transitions/gloves-life-chaos.json `
+	--output data/policies/gloves-life-chaos-policy.json
+
+python experiments/policy_rollout.py `
+	--graph data/transitions/gloves-life-chaos.json `
+	--policy data/policies/gloves-life-chaos-policy.json `
+	--output data/policies/gloves-life-chaos-validation.json `
+	--episodes 10000 `
+	--seed 42
+```
+
+The encoder retains every modifier attribute inspected by implemented crafting
+mechanics, so this example produces a complete graph with no abstraction
+collisions. Its Chaos transitions are exact relative to the imported PoE2DB
+weights and pinned league price snapshot. Those third-party weights are still
+not a claim that the model perfectly reproduces hidden in-game behavior.
 
 Summarize modifier sections such as `normal`, `essence`, and `bonded`:
 
@@ -268,6 +416,16 @@ Available action IDs:
 - `greater-chaos-orb`
 - `perfect-chaos-orb`
 - `orb-of-annulment`
+- `fracturing-orb`
+
+Greater and Perfect Essence IDs follow these patterns:
+
+- `greater-essence-of-<family>`
+- `perfect-essence-of-<family>`
+
+For example, `greater-essence-of-the-body` and
+`perfect-essence-of-grounding`. Lesser, normal, and Corrupted Essences are not
+registered in the current endgame scope.
 
 Available Omen IDs:
 
@@ -279,6 +437,8 @@ Available Omen IDs:
 - `sinistral-erasure`
 - `dextral-erasure`
 - `whittling`
+- `sinistral-crystallisation`
+- `dextral-crystallisation`
 
 `--top` only limits console tables. JSON reports always retain every outcome.
 

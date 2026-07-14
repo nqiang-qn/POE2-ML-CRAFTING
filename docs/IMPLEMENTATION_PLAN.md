@@ -343,5 +343,13 @@ architectural blocker.
 
 ## Immediate Next Step
 
-Implement Milestone 1 with one synthetic item class and enough modifiers to
-exercise prefix/suffix limits, level requirements, and group conflicts.
+Cache modifier pools and extend exact weight-derived transition enumeration to
+single-step additions and removals (Annulment, Augmentation, Regal, and Exalted)
+before comparing multiple real glove strategies. Chaos tiers already use exact
+enumeration.
+Optimizer runs reject truncated graphs and unresolved state-abstraction
+collisions unless the user explicitly selects an approximation policy.
+
+Greater Annulment and historical Regal-specific Omens are excluded because
+they are not obtainable in the current game. Hinekora's Lock is explicitly out
+of project scope.

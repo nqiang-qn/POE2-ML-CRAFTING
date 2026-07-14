@@ -1,3 +1,5 @@
+/** Typed SQLite queries for imported PoE 2 modifier metadata and weights. */
+
 import type { DatabaseSync } from "node:sqlite";
 
 /** Section-name patterns omitted from the initial supported crafting pool. */

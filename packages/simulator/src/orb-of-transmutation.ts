@@ -1,3 +1,5 @@
+/** Tiered Transmutation actions that upgrade normal items to magic rarity. */
+
 import { RARITIES, changeRarity, type Item } from "@poe2craft/domain";
 import { addRandomModifier } from "./add-random-modifier.js";
 import type { CraftingAction } from "./crafting-action.js";

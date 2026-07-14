@@ -1,3 +1,5 @@
+/** CLI for running deterministic repeated simulations from JSON configuration. */
+
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -136,6 +138,10 @@ function printReport(report: SimulationReport, top: number): void {
 	if (Object.keys(report.removedModifiers).length) {
 		console.log(`Top ${top} removed modifier frequencies:`);
 		console.table(sortedCounts(report.removedModifiers, top));
+	}
+	if (Object.keys(report.fracturedModifiers).length) {
+		console.log(`Top ${top} fractured modifier frequencies:`);
+		console.table(sortedCounts(report.fracturedModifiers, top));
 	}
 	console.log("Resulting affix counts:");
 	console.table(sortedCounts(report.resultingAffixCounts));

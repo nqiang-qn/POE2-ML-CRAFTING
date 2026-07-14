@@ -12,11 +12,19 @@
 		"lint": "eslint .",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"check": "npm run typecheck && npm run lint && npm run format:check && npm test",
-		"test": "tsx tests/import-poe2db-modifiers.test.ts && tsx tests/crafting-actions.test.ts",
+		"check": "npm run docs:check && npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:python",
+		"docs:check": "node scripts/check-documentation.mjs",
+		"test": "tsx tests/import-poe2db-modifiers.test.ts && tsx tests/market-prices.test.ts && tsx tests/crafting-actions.test.ts",
 		"import:gloves": "tsx packages/poe2db-importer/src/cli.ts",
+		"import:essences": "tsx packages/poe2db-importer/src/essence-cli.ts",
 		"query:modifiers": "tsx packages/data/src/query-cli.ts",
-		"simulate": "tsx packages/simulator/src/simulate-cli.ts"
+		"import:prices": "tsx packages/data/src/market-price-cli.ts",
+		"simulate": "tsx packages/simulator/src/simulate-cli.ts",
+		"sample:transition": "tsx packages/simulator/src/transition-cli.ts",
+		"discover:graph": "tsx packages/simulator/src/graph-cli.ts",
+		"fixture:e2e-graph": "tsx tests/export-e2e-graph.ts",
+		"test:python": "python -m unittest discover -s experiments -p \"test_*.py\"",
+		"validate:essences": "tsx packages/simulator/src/validate-essences-cli.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

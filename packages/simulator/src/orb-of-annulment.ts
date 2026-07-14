@@ -1,3 +1,5 @@
+/** Orb of Annulment uniform removal with fracture and Omen restrictions. */
+
 import type { Item } from "@poe2craft/domain";
 import type { CraftingAction } from "./crafting-action.js";
 import { isModifierRemovable, removeRandomModifier } from "./remove-random-modifier.js";
